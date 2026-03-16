@@ -7,6 +7,3 @@
 
 /* default layer count */
 #define DYNAMIC_KEYMAP_LAYER_COUNT 4
-
-#define VENDOR_ID  0xFEED
-#define PRODUCT_ID 0x6060
