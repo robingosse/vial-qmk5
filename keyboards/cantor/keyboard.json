@@ -12,8 +12,6 @@
     "url": "https://github.com/diepala/cantor",
     "usb": {
         "device_version": "1.0.0",
-        "vendorId": "0xFEED",
-        "productId": "0x6060"
     },
     "matrix_pins": {
         "direct": [
