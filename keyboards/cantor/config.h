@@ -7,6 +7,9 @@
 #define SERIAL_USART_TX_PIN B6     // USART TX pin
 #define SERIAL_USART_RX_PIN B7     // USART RX pin
 
+#define VENDOR_ID  0xFEED
+#define PRODUCT_ID 0x6060
+
 /*
  * Feature disable options
  *  These options are also useful to firmware size reduction.
