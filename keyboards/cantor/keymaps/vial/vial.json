@@ -3,6 +3,7 @@
     "lighting": "none",
     "vendorId": "0xFEED",
     "productId": "0x6060",
+    "uid": [240, 103, 47, 84, 35, 179, 123, 85],
     "matrix": {
         "rows": 8,
         "cols": 6
