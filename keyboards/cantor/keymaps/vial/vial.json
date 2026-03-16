@@ -2,7 +2,7 @@
     "name": "cantor",
     "lighting": "none",
     "vendorId": "0xFEED",
-    "productId": "0x0000",
+    "productId": "0x6060",
     "matrix": {
         "rows": 8,
         "cols": 6
