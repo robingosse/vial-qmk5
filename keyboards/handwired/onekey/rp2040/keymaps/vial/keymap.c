@@ -2,11 +2,11 @@
 
 #ifdef VIAL_ENABLE
 
-combo_t key_combos[1];
+combo_t key_combos[] = {};
 
-tap_dance_action_t tap_dance_actions[1];
+tap_dance_action_t tap_dance_actions[] = {};
 
-const key_override_t **key_overrides = NULL;
+const key_override_t *key_overrides[] = {};
 
 #endif
 
