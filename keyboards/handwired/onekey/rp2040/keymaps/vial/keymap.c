@@ -1,9 +1,5 @@
 #include QMK_KEYBOARD_H
 
-combo_t key_combos[] = {};
-tap_dance_action_t tap_dance_actions[] = {};
-const key_override_t *key_overrides[] = {};
-
 const uint16_t PROGMEM keymaps[][MATRIX_ROWS][MATRIX_COLS] = {
     [0] = LAYOUT(
         KC_Q, KC_W, KC_E, KC_R, KC_T, KC_Y,
