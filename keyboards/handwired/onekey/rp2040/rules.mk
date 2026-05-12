@@ -1,4 +1,3 @@
-VIAL_ENABLE = yes
 LTO_ENABLE = yes
 
 CUSTOM_MATRIX = lite
