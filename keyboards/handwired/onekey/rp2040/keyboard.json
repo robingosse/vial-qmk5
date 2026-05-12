@@ -14,6 +14,14 @@
         "rows": 6,
         "cols": 6
     },
+    "features": {
+        "vial": true,
+        "mousekey": false,
+        "extrakey": true,
+        "nkro": true,
+        "console": false,
+        "command": false
+    }    
     "layouts": {
         "LAYOUT": {
             "layout": [
