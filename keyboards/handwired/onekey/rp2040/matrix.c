@@ -1,18 +1,12 @@
 // DacMan custom matrix scanner
-// Rows 0-2: left MCP23017 half
-// Rows 3-5: right RP2040 half
-// Cols 0-5: shared logical columns
 
 #include "quantum.h"
 #include "matrix.h"
 #include "i2c_master.h"
 #include "wait.h"
 
-// MCP23017 I2C address.
-// QMK usually expects the 7-bit address shifted left by 1.
-#define MCP23017_ADDR 0x40
+#define MCP23017_ADDR 0x20
 
-// MCP23017 registers, BANK = 0 default addressing.
 #define MCP_IODIRA 0x00
 #define MCP_IODIRB 0x01
 #define MCP_GPPUA  0x0C
@@ -22,59 +16,49 @@
 #define MCP_OLATA  0x14
 #define MCP_OLATB  0x15
 
-// Right half direct RP2040 pins.
 static const pin_t row_pins[3] = { GP0, GP2, GP4 };
 static const pin_t col_pins[6] = { GP6, GP8, GP10, GP12, GP14, GP26 };
 
-// Left half MCP23017 mapping:
-// Rows: A0, A1, A2
-// Cols: A3, A4, A5, A6, A7, B7
-static const uint8_t left_row_bits[3] = { 0, 1, 2 };
+static void mcp_write(uint8_t reg, uint8_t value) {
+    uint8_t data[2] = { reg, value };
+    i2c_transmit(MCP23017_ADDR, data, 2, 100);
+}
 
-// QMK stores pressed keys as 1 bits in current_matrix[row].
+static uint8_t mcp_read(uint8_t reg) {
+    uint8_t value = 0;
+
+    i2c_transmit(MCP23017_ADDR, &reg, 1, 100);
+    i2c_receive(MCP23017_ADDR, &value, 1, 100);
+
+    return value;
+}
+
 static void select_left_row(uint8_t row) {
-    // Expander setup for ROW2COL:
-    // - One selected row is driven LOW as output.
-    // - Other row pins float as inputs with pullups.
-    // - Column pins are inputs with pullups.
-    //
-    // A port:
-    // A0-A2 rows.
-    // A3-A7 columns.
     uint8_t iodira = 0xFF;
     uint8_t olata  = 0xFF;
 
-    iodira &= ~(1 << left_row_bits[row]);  // selected row becomes output
-    olata  &= ~(1 << left_row_bits[row]);  // selected row driven low
+    iodira &= ~(1 << row);
+    olata  &= ~(1 << row);
 
-    i2c_writeReg(MCP23017_ADDR, MCP_IODIRA, &iodira, 1, 100);
-    i2c_writeReg(MCP23017_ADDR, MCP_OLATA,  &olata,  1, 100);
+    mcp_write(MCP_IODIRA, iodira);
+    mcp_write(MCP_OLATA, olata);
 
-    // B7 is thumb column input. Everything else on B remains input.
-    uint8_t iodirb = 0xFF;
-    uint8_t olatb  = 0xFF;
-    i2c_writeReg(MCP23017_ADDR, MCP_IODIRB, &iodirb, 1, 100);
-    i2c_writeReg(MCP23017_ADDR, MCP_OLATB,  &olatb,  1, 100);
+    mcp_write(MCP_IODIRB, 0xFF);
+    mcp_write(MCP_OLATB, 0xFF);
 }
 
 static matrix_row_t read_left_cols(void) {
-    uint8_t gpioa = 0xFF;
-    uint8_t gpiob = 0xFF;
-
-    i2c_readReg(MCP23017_ADDR, MCP_GPIOA, &gpioa, 1, 100);
-    i2c_readReg(MCP23017_ADDR, MCP_GPIOB, &gpiob, 1, 100);
+    uint8_t gpioa = mcp_read(MCP_GPIOA);
+    uint8_t gpiob = mcp_read(MCP_GPIOB);
 
     matrix_row_t row = 0;
 
-    // Columns A3-A7 become logical cols 0-4.
-    // Active low: pressed means the input reads 0.
     if (!(gpioa & (1 << 3))) row |= (1 << 0);
     if (!(gpioa & (1 << 4))) row |= (1 << 1);
     if (!(gpioa & (1 << 5))) row |= (1 << 2);
     if (!(gpioa & (1 << 6))) row |= (1 << 3);
     if (!(gpioa & (1 << 7))) row |= (1 << 4);
 
-    // Column B7 becomes logical col 5.
     if (!(gpiob & (1 << 7))) row |= (1 << 5);
 
     return row;
@@ -104,23 +88,15 @@ static matrix_row_t read_right_cols(void) {
 void matrix_init_custom(void) {
     i2c_init();
 
-    // MCP23017 initial state:
-    // all pins input
-    uint8_t all_inputs = 0xFF;
-    uint8_t all_high   = 0xFF;
+    mcp_write(MCP_IODIRA, 0xFF);
+    mcp_write(MCP_IODIRB, 0xFF);
 
-    i2c_writeReg(MCP23017_ADDR, MCP_IODIRA, &all_inputs, 1, 100);
-    i2c_writeReg(MCP23017_ADDR, MCP_IODIRB, &all_inputs, 1, 100);
+    mcp_write(MCP_GPPUA, 0xFF);
+    mcp_write(MCP_GPPUB, 0xFF);
 
-    // Enable pullups on all MCP pins.
-    i2c_writeReg(MCP23017_ADDR, MCP_GPPUA, &all_high, 1, 100);
-    i2c_writeReg(MCP23017_ADDR, MCP_GPPUB, &all_high, 1, 100);
+    mcp_write(MCP_OLATA, 0xFF);
+    mcp_write(MCP_OLATB, 0xFF);
 
-    // Set output latch high before any pin becomes output.
-    i2c_writeReg(MCP23017_ADDR, MCP_OLATA, &all_high, 1, 100);
-    i2c_writeReg(MCP23017_ADDR, MCP_OLATB, &all_high, 1, 100);
-
-    // Right half local matrix pins.
     for (uint8_t i = 0; i < 3; i++) {
         setPinInputHigh(row_pins[i]);
     }
@@ -133,10 +109,10 @@ void matrix_init_custom(void) {
 bool matrix_scan_custom(matrix_row_t current_matrix[]) {
     bool changed = false;
 
-    // Left half on MCP23017:
-    // logical rows 0, 1, 2
+    // LEFT HALF (rows 0-2)
     for (uint8_t row = 0; row < 3; row++) {
         select_left_row(row);
+
         wait_us(30);
 
         matrix_row_t new_row = read_left_cols();
@@ -147,19 +123,17 @@ bool matrix_scan_custom(matrix_row_t current_matrix[]) {
         }
     }
 
-    // Return MCP rows to all-inputs after scan.
-    uint8_t all_inputs = 0xFF;
-    uint8_t all_high   = 0xFF;
-    i2c_writeReg(MCP23017_ADDR, MCP_IODIRA, &all_inputs, 1, 100);
-    i2c_writeReg(MCP23017_ADDR, MCP_OLATA,  &all_high,   1, 100);
+    mcp_write(MCP_IODIRA, 0xFF);
+    mcp_write(MCP_OLATA, 0xFF);
 
-    // Right half on RP2040:
-    // logical rows 3, 4, 5
+    // RIGHT HALF (rows 3-5)
     for (uint8_t row = 0; row < 3; row++) {
         select_right_row(row);
+
         wait_us(30);
 
         matrix_row_t new_row = read_right_cols();
+
         uint8_t logical_row = row + 3;
 
         if (current_matrix[logical_row] != new_row) {
@@ -168,7 +142,6 @@ bool matrix_scan_custom(matrix_row_t current_matrix[]) {
         }
     }
 
-    // Return local rows to idle.
     for (uint8_t i = 0; i < 3; i++) {
         setPinInputHigh(row_pins[i]);
     }
