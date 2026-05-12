@@ -26,31 +26,12 @@ jobs:
           persist-credentials: false
           submodules: recursive
 
-      - name: Diagnostics
-        run: |
-          git config --global --add safe.directory $(pwd)
-
-          echo "========== CURRENT COMMIT =========="
-          git rev-parse HEAD
-
-          echo ""
-          echo "========== WORKFLOW CONTENTS =========="
-          cat .github/workflows/ci.yml
-
-          echo ""
-          echo "========== KEYMAP FILES =========="
-          find keyboards/handwired/onekey/rp2040/keymaps -maxdepth 3 -type f -print
-
       - name: Compile DacMan firmware
         run: |
           git config --global --add safe.directory $(pwd)
 
-          echo "========== BUILDING =========="
-
           make handwired/dacman:vial
 
-          echo ""
-          echo "========== UF2 FILES =========="
           find . -name "*.uf2" -print
 
       - name: Upload firmware artifact
