@@ -27,7 +27,7 @@ jobs:
 
           echo "Building DacMan RP2040 Vial firmware..."
 
-          qmk compile -kb handwired/onekey/rp2040 -km vial
+          make handwired/onekey/rp2040:vial
 
           echo "UF2 files found:"
           find . -name "*.uf2" -print
