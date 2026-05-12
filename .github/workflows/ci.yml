@@ -47,7 +47,7 @@ jobs:
 
           echo "========== BUILDING =========="
 
-          make handwired/onekey/rp2040:vial
+          make handwired/dacman:vial
 
           echo ""
           echo "========== UF2 FILES =========="
