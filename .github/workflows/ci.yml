@@ -1,6 +1,9 @@
 name: CI
 
-on: [pull_request, push, workflow_dispatch]
+on:
+  pull_request:
+  push:
+  workflow_dispatch:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -12,7 +15,9 @@ jobs:
   build-dacman:
     name: Build DacMan RP2040 Vial
     runs-on: ubuntu-latest
-    container: ghcr.io/qmk/qmk_cli@sha256:2dc05fc9f32efebd6b05c2b8676ee548358bc7e151e9dbf4dac6b6eed4513b07
+
+    container:
+      image: ghcr.io/qmk/qmk_cli@sha256:2dc05fc9f32efebd6b05c2b8676ee548358bc7e151e9dbf4dac6b6eed4513b07
 
     steps:
       - name: Checkout repo
@@ -21,26 +26,31 @@ jobs:
           persist-credentials: false
           submodules: recursive
 
-      - name: Show workflow and keymaps
+      - name: Diagnostics
         run: |
-          echo "Current commit:"
+          git config --global --add safe.directory $(pwd)
+
+          echo "========== CURRENT COMMIT =========="
           git rev-parse HEAD
 
-          echo "Workflow contents:"
+          echo ""
+          echo "========== WORKFLOW CONTENTS =========="
           cat .github/workflows/ci.yml
 
-          echo "Available keymaps:"
-          find keyboards/handwired/onekey/rp2040/keymaps -maxdepth 2 -type f -print
+          echo ""
+          echo "========== KEYMAP FILES =========="
+          find keyboards/handwired/onekey/rp2040/keymaps -maxdepth 3 -type f -print
 
       - name: Compile DacMan firmware
         run: |
           git config --global --add safe.directory $(pwd)
 
-          echo "Building DacMan RP2040 Vial firmware..."
+          echo "========== BUILDING =========="
 
           make handwired/onekey/rp2040:vial
 
-          echo "UF2 files found:"
+          echo ""
+          echo "========== UF2 FILES =========="
           find . -name "*.uf2" -print
 
       - name: Upload firmware artifact
