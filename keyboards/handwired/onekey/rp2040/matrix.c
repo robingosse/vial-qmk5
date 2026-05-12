@@ -25,10 +25,15 @@ static void mcp_write(uint8_t reg, uint8_t value) {
 }
 
 static uint8_t mcp_read(uint8_t reg) {
-    uint8_t value = 0;
+    uint8_t value = 0xFF;
 
-    i2c_transmit(MCP23017_ADDR, &reg, 1, 100);
-    i2c_receive(MCP23017_ADDR, &value, 1, 100);
+    if (i2c_transmit(MCP23017_ADDR, &reg, 1, 100) != I2C_STATUS_SUCCESS) {
+        return 0xFF;
+    }
+
+    if (i2c_receive(MCP23017_ADDR, &value, 1, 100) != I2C_STATUS_SUCCESS) {
+        return 0xFF;
+    }
 
     return value;
 }
