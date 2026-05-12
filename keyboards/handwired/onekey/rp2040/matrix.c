@@ -39,6 +39,50 @@ static bool mcp_read(uint8_t reg, uint8_t *value) {
     return true;
 }
 
+static void select_left_row(uint8_t row) {
+    if (!mcp_available) return;
+
+    uint8_t iodira = 0xFF;
+    uint8_t olata  = 0xFF;
+
+    iodira &= ~(1 << row);
+    olata  &= ~(1 << row);
+
+    mcp_write(MCP_IODIRA, iodira);
+    mcp_write(MCP_OLATA, olata);
+
+    mcp_write(MCP_IODIRB, 0xFF);
+    mcp_write(MCP_OLATB, 0xFF);
+}
+
+static matrix_row_t read_left_cols(void) {
+    if (!mcp_available) return 0;
+
+    uint8_t gpioa = 0xFF;
+    uint8_t gpiob = 0xFF;
+
+    if (!mcp_read(MCP_GPIOA, &gpioa)) {
+        mcp_available = false;
+        return 0;
+    }
+
+    if (!mcp_read(MCP_GPIOB, &gpiob)) {
+        mcp_available = false;
+        return 0;
+    }
+
+    matrix_row_t row = 0;
+
+    if (!(gpioa & (1 << 3))) row |= (1 << 0);
+    if (!(gpioa & (1 << 4))) row |= (1 << 1);
+    if (!(gpioa & (1 << 5))) row |= (1 << 2);
+    if (!(gpioa & (1 << 6))) row |= (1 << 3);
+    if (!(gpioa & (1 << 7))) row |= (1 << 4);
+    if (!(gpiob & (1 << 7))) row |= (1 << 5);
+
+    return row;
+}
+
 static void mcp_all_idle(void) {
     if (!mcp_available) return;
 
@@ -48,67 +92,25 @@ static void mcp_all_idle(void) {
     mcp_write(MCP_OLATB, 0xFF);
 }
 
-static void select_left_col(uint8_t col) {
-    if (!mcp_available) return;
-
-    uint8_t iodira = 0xFF;
-    uint8_t iodirb = 0xFF;
-    uint8_t olata  = 0xFF;
-    uint8_t olatb  = 0xFF;
-
-    if (col < 5) {
-        uint8_t bit = col + 3;
-        iodira &= ~(1 << bit);
-        olata  &= ~(1 << bit);
-    } else {
-        iodirb &= ~(1 << 7);
-        olatb  &= ~(1 << 7);
+static void select_right_row(uint8_t row) {
+    for (uint8_t i = 0; i < 3; i++) {
+        setPinInputHigh(right_row_pins[i]);
     }
 
-    mcp_write(MCP_IODIRA, iodira);
-    mcp_write(MCP_IODIRB, iodirb);
-    mcp_write(MCP_OLATA, olata);
-    mcp_write(MCP_OLATB, olatb);
+    setPinOutput(right_row_pins[row]);
+    writePinLow(right_row_pins[row]);
 }
 
-static uint8_t read_left_rows(void) {
-    if (!mcp_available) return 0;
+static matrix_row_t read_right_cols(void) {
+    matrix_row_t row = 0;
 
-    uint8_t gpioa = 0xFF;
-
-    if (!mcp_read(MCP_GPIOA, &gpioa)) {
-        mcp_available = false;
-        return 0;
-    }
-
-    uint8_t rows = 0;
-
-    if (!(gpioa & (1 << 0))) rows |= (1 << 0);
-    if (!(gpioa & (1 << 1))) rows |= (1 << 1);
-    if (!(gpioa & (1 << 2))) rows |= (1 << 2);
-
-    return rows;
-}
-
-static void select_right_col(uint8_t col) {
-    for (uint8_t i = 0; i < 6; i++) {
-        setPinInputHigh(right_col_pins[i]);
-    }
-
-    setPinOutput(right_col_pins[col]);
-    writePinLow(right_col_pins[col]);
-}
-
-static uint8_t read_right_rows(void) {
-    uint8_t rows = 0;
-
-    for (uint8_t row = 0; row < 3; row++) {
-        if (!readPin(right_row_pins[row])) {
-            rows |= (1 << row);
+    for (uint8_t col = 0; col < 6; col++) {
+        if (!readPin(right_col_pins[col])) {
+            row |= (1 << col);
         }
     }
 
-    return rows;
+    return row;
 }
 
 void matrix_init_custom(void) {
@@ -138,37 +140,23 @@ bool matrix_scan_custom(matrix_row_t current_matrix[]) {
     matrix_row_t next[MATRIX_ROWS] = {0};
 
     if (mcp_available) {
-        for (uint8_t col = 0; col < 6; col++) {
-            select_left_col(col);
+        for (uint8_t row = 0; row < 3; row++) {
+            select_left_row(row);
             wait_us(30);
-
-            uint8_t left_rows = read_left_rows();
-
-            for (uint8_t row = 0; row < 3; row++) {
-                if (left_rows & (1 << row)) {
-                    next[row] |= (1 << col);
-                }
-            }
+            next[row] = read_left_cols();
         }
 
         mcp_all_idle();
     }
 
-    for (uint8_t col = 0; col < 6; col++) {
-        select_right_col(col);
+    for (uint8_t row = 0; row < 3; row++) {
+        select_right_row(row);
         wait_us(30);
-
-        uint8_t right_rows = read_right_rows();
-
-        for (uint8_t row = 0; row < 3; row++) {
-            if (right_rows & (1 << row)) {
-                next[row + 3] |= (1 << col);
-            }
-        }
+        next[row + 3] = read_right_cols();
     }
 
-    for (uint8_t col = 0; col < 6; col++) {
-        setPinInputHigh(right_col_pins[col]);
+    for (uint8_t row = 0; row < 3; row++) {
+        setPinInputHigh(right_row_pins[row]);
     }
 
     for (uint8_t row = 0; row < MATRIX_ROWS; row++) {
