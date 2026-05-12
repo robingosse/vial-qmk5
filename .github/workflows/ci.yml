@@ -21,6 +21,17 @@ jobs:
           persist-credentials: false
           submodules: recursive
 
+      - name: Show workflow and keymaps
+        run: |
+          echo "Current commit:"
+          git rev-parse HEAD
+
+          echo "Workflow contents:"
+          cat .github/workflows/ci.yml
+
+          echo "Available keymaps:"
+          find keyboards/handwired/onekey/rp2040/keymaps -maxdepth 2 -type f -print
+
       - name: Compile DacMan firmware
         run: |
           git config --global --add safe.directory $(pwd)
