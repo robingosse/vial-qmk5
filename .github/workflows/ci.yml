@@ -9,8 +9,8 @@ concurrency:
 permissions: {}
 
 jobs:
-  build-cantor:
-    name: Build Cantor (Vial)
+  build-dacman:
+    name: Build DacMan RP2040 Vial
     runs-on: ubuntu-latest
     container: ghcr.io/qmk/qmk_cli@sha256:2dc05fc9f32efebd6b05c2b8676ee548358bc7e151e9dbf4dac6b6eed4513b07
 
@@ -21,17 +21,20 @@ jobs:
           persist-credentials: false
           submodules: recursive
 
-      - name: Compile Cantor firmware
+      - name: Compile DacMan firmware
         run: |
           git config --global --add safe.directory $(pwd)
 
-          echo "Building Cantor Vial firmware..."
+          echo "Building DacMan RP2040 Vial firmware..."
 
-          qmk compile -kb cantor -km vial
+          qmk compile -kb handwired/onekey/rp2040 -km vial
+
+          echo "UF2 files found:"
+          find . -name "*.uf2" -print
 
       - name: Upload firmware artifact
         uses: actions/upload-artifact@v4
         with:
           name: Purple-Dac-Man-firmware
           path: |
-            *.uf2
+            **/*.uf2
