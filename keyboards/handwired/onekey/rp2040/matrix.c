@@ -17,19 +17,21 @@
 static const pin_t right_row_pins[3] = { GP0, GP2, GP4 };
 static const pin_t right_col_pins[6] = { GP6, GP8, GP10, GP12, GP14, GP26 };
 
+static bool mcp_available = false;
+
 static bool mcp_write(uint8_t reg, uint8_t value) {
     uint8_t data[2] = { reg, value };
-    return i2c_transmit(MCP23017_ADDR, data, 2, 100) == I2C_STATUS_SUCCESS;
+    return i2c_transmit(MCP23017_ADDR, data, 2, 5) == I2C_STATUS_SUCCESS;
 }
 
 static bool mcp_read(uint8_t reg, uint8_t *value) {
     *value = 0xFF;
 
-    if (i2c_transmit(MCP23017_ADDR, &reg, 1, 100) != I2C_STATUS_SUCCESS) {
+    if (i2c_transmit(MCP23017_ADDR, &reg, 1, 5) != I2C_STATUS_SUCCESS) {
         return false;
     }
 
-    if (i2c_receive(MCP23017_ADDR, value, 1, 100) != I2C_STATUS_SUCCESS) {
+    if (i2c_receive(MCP23017_ADDR, value, 1, 5) != I2C_STATUS_SUCCESS) {
         *value = 0xFF;
         return false;
     }
@@ -38,6 +40,8 @@ static bool mcp_read(uint8_t reg, uint8_t *value) {
 }
 
 static void mcp_all_idle(void) {
+    if (!mcp_available) return;
+
     mcp_write(MCP_IODIRA, 0xFF);
     mcp_write(MCP_IODIRB, 0xFF);
     mcp_write(MCP_OLATA, 0xFF);
@@ -45,17 +49,19 @@ static void mcp_all_idle(void) {
 }
 
 static void select_left_col(uint8_t col) {
+    if (!mcp_available) return;
+
     uint8_t iodira = 0xFF;
     uint8_t iodirb = 0xFF;
     uint8_t olata  = 0xFF;
     uint8_t olatb  = 0xFF;
 
     if (col < 5) {
-        uint8_t bit = col + 3;      // cols 0-4 = A3-A7
+        uint8_t bit = col + 3;
         iodira &= ~(1 << bit);
         olata  &= ~(1 << bit);
     } else {
-        iodirb &= ~(1 << 7);        // col 5 = B7
+        iodirb &= ~(1 << 7);
         olatb  &= ~(1 << 7);
     }
 
@@ -66,10 +72,13 @@ static void select_left_col(uint8_t col) {
 }
 
 static uint8_t read_left_rows(void) {
+    if (!mcp_available) return 0;
+
     uint8_t gpioa = 0xFF;
 
     if (!mcp_read(MCP_GPIOA, &gpioa)) {
-        return 0x00;
+        mcp_available = false;
+        return 0;
     }
 
     uint8_t rows = 0;
@@ -105,12 +114,15 @@ static uint8_t read_right_rows(void) {
 void matrix_init_custom(void) {
     i2c_init();
 
-    mcp_write(MCP_IODIRA, 0xFF);
-    mcp_write(MCP_IODIRB, 0xFF);
-    mcp_write(MCP_GPPUA, 0xFF);
-    mcp_write(MCP_GPPUB, 0xFF);
-    mcp_write(MCP_OLATA, 0xFF);
-    mcp_write(MCP_OLATB, 0xFF);
+    mcp_available = mcp_write(MCP_IODIRA, 0xFF);
+
+    if (mcp_available) {
+        mcp_write(MCP_IODIRB, 0xFF);
+        mcp_write(MCP_GPPUA, 0xFF);
+        mcp_write(MCP_GPPUB, 0xFF);
+        mcp_write(MCP_OLATA, 0xFF);
+        mcp_write(MCP_OLATB, 0xFF);
+    }
 
     for (uint8_t row = 0; row < 3; row++) {
         setPinInputHigh(right_row_pins[row]);
@@ -123,23 +135,24 @@ void matrix_init_custom(void) {
 
 bool matrix_scan_custom(matrix_row_t current_matrix[]) {
     bool changed = false;
-
     matrix_row_t next[MATRIX_ROWS] = {0};
 
-    for (uint8_t col = 0; col < 6; col++) {
-        select_left_col(col);
-        wait_us(30);
+    if (mcp_available) {
+        for (uint8_t col = 0; col < 6; col++) {
+            select_left_col(col);
+            wait_us(30);
 
-        uint8_t left_rows = read_left_rows();
+            uint8_t left_rows = read_left_rows();
 
-        for (uint8_t row = 0; row < 3; row++) {
-            if (left_rows & (1 << row)) {
-                next[row] |= (1 << col);
+            for (uint8_t row = 0; row < 3; row++) {
+                if (left_rows & (1 << row)) {
+                    next[row] |= (1 << col);
+                }
             }
         }
-    }
 
-    mcp_all_idle();
+        mcp_all_idle();
+    }
 
     for (uint8_t col = 0; col < 6; col++) {
         select_right_col(col);
