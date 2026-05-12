@@ -19,8 +19,8 @@
   },
   "diode_direction": "ROW2COL",
   "matrix_size": {
-    "rows": 6,
-    "cols": 6
+    "rows": 3,
+    "cols": 12
   },
   "layouts": {
     "LAYOUT": {
