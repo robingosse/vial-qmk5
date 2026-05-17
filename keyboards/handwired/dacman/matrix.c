@@ -120,45 +120,87 @@ static uint8_t read_right_rows(void) {
 void matrix_init_custom(void) {
     i2c_init();
 
-    mcp_available = mcp_write(MCP_IODIRA, 0xFF);
-
-    if (mcp_available) {
-        mcp_write(MCP_IODIRB, 0xFF);
-        mcp_write(MCP_GPPUA, 0xFF);
-        mcp_write(MCP_GPPUB, 0xFF);
-        mcp_write(MCP_OLATA, 0xFF);
-        mcp_write(MCP_OLATB, 0xFF);
+    // 1. Initialize RP2040 Pins (Right Half) - [ROW2COL LOGIC]
+    for (uint8_t i = 0; i < 6; i++) {
+        setPinInputLow(col_pins[i]); // Columns pulled DOWN to GND
+    }
+    for (uint8_t i = 0; i < 3; i++) {
+        setPinOutput(row_pins[i]);
+        writePinLow(row_pins[i]);    // Rows default to LOW
     }
 
-    for (uint8_t row = 0; row < 3; row++) {
-        setPinInputHigh(right_row_pins[row]);
-    }
+    // 2. Initialize MCP23017 (Left Half) - [COL2ROW LOGIC]
+    // We use a 10ms timeout during init. If it fails, it just skips.
+    uint8_t data[2];
+    
+    // Set Port A (Cols 0-5) as inputs (1), Port B (Rows 0-2) as outputs (0)
+    data[0] = 0x3F; 
+    i2c_writeReg(I2C_EXPANDER_ADDR, IODIRA, &data[0], 1, 10);
+    data[0] = 0xF8; 
+    i2c_writeReg(I2C_EXPANDER_ADDR, IODIRB, &data[0], 1, 10);
 
-    for (uint8_t col = 0; col < 6; col++) {
-        setPinInputHigh(right_col_pins[col]);
-    }
+    // Enable internal pull-ups on Port A (Columns)
+    data[0] = 0x3F;
+    i2c_writeReg(I2C_EXPANDER_ADDR, GPPUA, &data[0], 1, 10);
+
+    // Set Port B (Rows) default state to High
+    data[0] = 0x07;
+    i2c_writeReg(I2C_EXPANDER_ADDR, GPIOB, &data[0], 1, 10);
 }
 
 bool matrix_scan_custom(matrix_row_t current_matrix[]) {
-    bool changed = false;
-    matrix_row_t next[MATRIX_ROWS] = {0};
+    bool matrix_has_changed = false;
 
-    if (mcp_available) {
-        for (uint8_t col = 0; col < 6; col++) {
-            select_left_col(col);
-            wait_us(30);
+    for (uint8_t row = 0; row < 3; row++) {
+        matrix_row_t last_row_value = current_matrix[row];
+        matrix_row_t current_row_value = 0;
 
-            uint8_t rows = read_left_rows();
-
-            for (uint8_t row = 0; row < 3; row++) {
-                if (rows & (1 << row)) {
-                    next[row] |= (1 << col);
+        // --- SCAN LEFT SIDE (MCP23017 via I2C) - [COL2ROW] ---
+        // Set current row LOW on GPB
+        uint8_t pb_out = 0x07 & ~(1 << row);
+        
+        // Use a strict 1ms timeout. If TRRS is unplugged, it aborts instantly.
+        if (i2c_writeReg(I2C_EXPANDER_ADDR, GPIOB, &pb_out, 1, 1) == I2C_STATUS_SUCCESS) {
+            uint8_t col_data = 0xFF;
+            if (i2c_readReg(I2C_EXPANDER_ADDR, GPIOA, &col_data, 1, 1) == I2C_STATUS_SUCCESS) {
+                // Read columns (GPA0-5). Look for LOW signal.
+                for (uint8_t col = 0; col < 6; col++) {
+                    if (!(col_data & (1 << col))) {
+                        current_row_value |= (1 << col);
+                    }
                 }
             }
+            // Restore expander row to HIGH
+            pb_out = 0x07;
+            i2c_writeReg(I2C_EXPANDER_ADDR, GPIOB, &pb_out, 1, 1);
         }
 
-        mcp_idle();
+        // --- SCAN RIGHT SIDE (RP2040 Direct) - [ROW2COL] ---
+        // Set current row HIGH on RP2040
+        writePinHigh(row_pins[row]);
+        
+        // Short delay to allow matrix to settle
+        wait_us(30);
+
+        // Read columns (Cols 6-11 mapped to our logical matrix)
+        // Look for HIGH signal.
+        for (uint8_t col = 0; col < 6; col++) {
+            if (readPin(col_pins[col]) == 1) { 
+                current_row_value |= ((matrix_row_t)1 << (col + 6));
+            }
+        }
+        
+        // Restore RP2040 row to LOW
+        writePinLow(row_pins[row]);
+
+        // Evaluate changes
+        if (last_row_value != current_row_value) {
+            current_matrix[row] = current_row_value;
+            matrix_has_changed = true;
+        }
     }
+    return matrix_has_changed;
+}
 
     for (uint8_t col = 0; col < 6; col++) {
         select_right_col(col);
