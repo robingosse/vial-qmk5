@@ -36,17 +36,17 @@ void matrix_init_custom(void) {
     
     // Set Port A (Cols 0-5) as inputs (1), Port B (Rows 0-2) as outputs (0)
     data[0] = 0x3F; 
-    i2c_writeRegister(I2C_EXPANDER_ADDR, IODIRA, &data[0], 1, 10);
+    i2c_write_register(I2C_EXPANDER_ADDR, IODIRA, &data[0], 1, 10);
     data[0] = 0xF8; 
-    i2c_writeRegister(I2C_EXPANDER_ADDR, IODIRB, &data[0], 1, 10);
+    i2c_write_register(I2C_EXPANDER_ADDR, IODIRB, &data[0], 1, 10);
 
     // Enable internal pull-ups on Port A (Columns)
     data[0] = 0x3F;
-    i2c_writeRegister(I2C_EXPANDER_ADDR, GPPUA, &data[0], 1, 10);
+    i2c_write_register(I2C_EXPANDER_ADDR, GPPUA, &data[0], 1, 10);
 
     // Set Port B (Rows) default state to High
     data[0] = 0x07;
-    i2c_writeRegister(I2C_EXPANDER_ADDR, GPIOB, &data[0], 1, 10);
+    i2c_write_register(I2C_EXPANDER_ADDR, GPIOB, &data[0], 1, 10);
 }
 
 bool matrix_scan_custom(matrix_row_t current_matrix[]) {
@@ -61,9 +61,9 @@ bool matrix_scan_custom(matrix_row_t current_matrix[]) {
         uint8_t pb_out = 0x07 & ~(1 << row);
         
         // 1ms timeout. If TRRS is unplugged, it skips seamlessly.
-        if (i2c_writeRegister(I2C_EXPANDER_ADDR, GPIOB, &pb_out, 1, 1) == I2C_STATUS_SUCCESS) {
+        if (i2c_write_register(I2C_EXPANDER_ADDR, GPIOB, &pb_out, 1, 1) == I2C_STATUS_SUCCESS) {
             uint8_t col_data = 0xFF;
-            if (i2c_readRegister(I2C_EXPANDER_ADDR, GPIOA, &col_data, 1, 1) == I2C_STATUS_SUCCESS) {
+            if (i2c_read_register(I2C_EXPANDER_ADDR, GPIOA, &col_data, 1, 1) == I2C_STATUS_SUCCESS) {
                 // Read columns (GPA0-5). Look for LOW signal.
                 for (uint8_t col = 0; col < 6; col++) {
                     if (!(col_data & (1 << col))) {
@@ -73,7 +73,7 @@ bool matrix_scan_custom(matrix_row_t current_matrix[]) {
             }
             // Restore expander row to HIGH
             pb_out = 0x07;
-            i2c_writeRegister(I2C_EXPANDER_ADDR, GPIOB, &pb_out, 1, 1);
+            i2c_write_register(I2C_EXPANDER_ADDR, GPIOB, &pb_out, 1, 1);
         }
 
         // --- SCAN RIGHT SIDE (RP2040 Direct) - [ROW2COL] ---
